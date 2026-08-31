@@ -1,6 +1,5 @@
 # Group46_OS_P1
-# COSC1114 Project 1 — Multithreading & Synchronisation
-Group: project1_group1
+Group: group46
 Members: Oisin Forde (s4094143), [Partner Name] (sXXXXXXX)
 
 ## Tasks Completed
