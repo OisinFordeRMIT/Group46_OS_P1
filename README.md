@@ -2,6 +2,7 @@
 Group: group46  
 Members: Oisin Forde (s4094143), [Partner Name] (sXXXXXXX)
 
+
 ## Tasks Completed
 
 
@@ -27,3 +28,5 @@ PLACE HOLDER
 
 ### Compile Commands
 gcc -Wall -Werror -o mscopier mscopier.c -lpthread
+
+ssh sXXXXXXXXXXXX@jupiter.csit.rmit.edu.au
