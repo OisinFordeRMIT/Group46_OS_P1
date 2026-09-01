@@ -32,6 +32,8 @@ struct Queue {
 };
 
 Queue buffer;
+bool firstWrite = true;
+
 
 ifstream inputFile;
 ofstream outputFile;
@@ -43,42 +45,64 @@ bool doneReading = false;
 pthread_t *readersThreadArray; //Init size once args are read
 pthread_t *writersThreadArray;
 
+pthread_mutex_t queueMutex = PTHREAD_MUTEX_INITIALIZER;
+
 void *producer(void *arg) {
     while (true) {
+        pthread_mutex_lock(&queueMutex);
 
         while (buffer.isFull()) {
+            pthread_mutex_unlock(&queueMutex);
+            continue; //Busy wait problem here
         }
 
         string read;
         if (!getline(inputFile, read)) {
+            pthread_mutex_unlock(&queueMutex);
             break;                          // no more data to read
         }
 
         buffer.push(read);
+        pthread_mutex_unlock(&queueMutex);
 
     }
 
-    // this producer is finished
+    // this producer is finished REVIEW<<<<<<<<<<<<<<<<<<
+    pthread_mutex_lock(&queueMutex);
     activeProducers--;
     if (activeProducers == 0) {
         doneReading = true;
     }
+
+    pthread_mutex_unlock(&queueMutex);
 
     return nullptr;
 }
 
 void *consumer(void *arg) {
     while (true) {
+        pthread_mutex_lock(&queueMutex);
 
         while (buffer.isEmpty() && !doneReading) {
+            pthread_mutex_unlock(&queueMutex);
+            continue; //Busy wait problem here
         }
 
         if (buffer.isEmpty() && doneReading) {
+            pthread_mutex_unlock(&queueMutex);
             break;
         }
 
         string consumed = buffer.pop();
-        outputFile << consumed << "\n";
+        
+        //Remove 1 too many newlines in output
+        if (!firstWrite) {
+            outputFile << "\n";
+        }
+        outputFile << consumed;
+        firstWrite = false;
+
+        pthread_mutex_unlock(&queueMutex);
     }
 
     return nullptr;
