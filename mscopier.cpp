@@ -51,7 +51,7 @@ void *producer(void *arg) {
     while (true) {
         pthread_mutex_lock(&queueMutex);
 
-        while (buffer.isFull()) {
+        if (buffer.isFull()) {
             pthread_mutex_unlock(&queueMutex);
             continue; //Busy wait problem here
         }
@@ -83,7 +83,7 @@ void *consumer(void *arg) {
     while (true) {
         pthread_mutex_lock(&queueMutex);
 
-        while (buffer.isEmpty() && !doneReading) {
+        if (buffer.isEmpty() && !doneReading) {
             pthread_mutex_unlock(&queueMutex);
             continue; //Busy wait problem here
         }
