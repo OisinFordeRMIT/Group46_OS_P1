@@ -127,6 +127,6 @@ valgrind --track-origins=yes --leak-check=full --show-leak-kinds=all ./mscopier 
 
 ```
 in use at exit: 0 bytes in 0 blocks
-total heap usage: 10,110 allocs, 10,110 frees
+total heap usage: 10,027 allocs, 10,027 frees
 ERROR SUMMARY: 0 errors from 0 contexts
 ```
