@@ -1,5 +1,11 @@
+# COSC1114 Project 1 - Group 46
+# make all   -> builds mmcopier and mscopier
+# make clean -> removes the executables and object files
+
 CC = g++
-CFLAGS = -Wall -Werror
+# -std=c++11 is required: the sources use nullptr, to_string and <deque>,
+# and the teaching servers' g++ does not default to C++11.
+CFLAGS = -Wall -Werror -std=c++11 -pthread
 LDFLAGS = -lpthread
 
 TARGETS = mmcopier mscopier

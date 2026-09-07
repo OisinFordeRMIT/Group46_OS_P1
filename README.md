@@ -1,100 +1,132 @@
-# Group46_OS_P1 - COSC1114 Operating Systems Principles, Project 1
+# Group46_OS_P1 - COSC1114 Project 1
 
 Group: group46
 Members: Oisin Forde (s4094143), Thisul Deven (s3988824)
 
-## Tasks completed
+## What is done
 
 | Task | Description | Status |
 |------|-------------|--------|
-| Task 1 | Multithreaded multiple file copying (`mmcopier`) | Done |
-| Task 2 - Subtask 1 | Reader and writer teams over a shared queue (`mscopier`) | Done |
-| Task 2 - Subtask 2 | `pthread_mutex` locks on the critical sections | Done |
-| Task 2 - Subtask 3 | Avoid busy waiting | In progress |
+| Task 1 | Multiple file copying, `mmcopier` | Done |
+| Task 2 subtask 1 | Reader and writer teams over a shared queue, `mscopier` | Done |
+| Task 2 subtask 2 | `pthread_mutex` on the critical sections | Done |
+| Task 2 subtask 3 | Busy waiting removed with `pthread_cond` | Done |
 
-## Compiling
+Subtask 3 uses condition variables, not `sleep()`.
 
-Tested on jupiter.csit.rmit.edu.au.
+## Building
 
 ```bash
 make clean
 make all
 ```
 
-`make all` builds `mmcopier` and `mscopier`. `make clean` removes the
-executables and object files. Both compile under `-Wall -Werror` with no
-warnings.
+That builds both programs. `make clean` deletes them again. Both compile with
+`-Wall -Werror` and no warnings. Tested on jupiter.csit.rmit.edu.au.
 
 ## Running
 
-### Task 1 - mmcopier
-
 ```bash
 ./mmcopier n source_dir destination_dir
+./mscopier n source_file destination_file
 ```
 
-`n` is between 2 and 10 and sets both the number of files and the number of
-threads. Thread `i` copies `source_dir/source<i>.txt` to
-`destination_dir/source<i>.txt`. If `destination_dir` does not exist,
-mmcopier creates it.
+`n` is between 2 and 10 in both. For mmcopier it is the number of files and
+threads, so thread `i` copies `source<i>.txt`. For mscopier it is the size of
+each team, so `./mscopier 10 input output` runs 10 readers and 10 writers.
+
+mmcopier creates the destination directory if it is missing. mscopier takes
+the two paths exactly as typed.
 
 ```bash
 unzip source_dir.zip
 ./mmcopier 3 source_dir destination_dir
+
+bash generate_text.sh 10000 > input
+./mscopier 10 input output
+diff input output
 ```
 
-That copies source1.txt, source2.txt and source3.txt with 3 threads.
+## Task 1, mmcopier
 
-### Task 2 - mscopier
+Each thread gets a `CopyJob` struct: where to read from, where to write to,
+and a flag it flips when the copy worked. Nothing crosses between threads, so
+there is no mutex in mmcopier anywhere. Every thread opens its own two streams
+and handles its own file, which is the point of the task.
 
-```bash
-./mscopier n source_file destination_file
-```
+`main` counts how many threads actually started. If `pthread_create` gives up
+halfway, only the threads that exist get joined.
 
-`n` readers and `n` writers copy one file through a shared queue.
+## Task 2, mscopier
 
-## How Task 1 works
+**The queue.** A 20 slot array used as a ring, with a head, a tail, and a
+count. Wrapping the indexes with `%` means nothing ever shuffles along when a
+line comes off the front.
 
-Each thread gets its own `CopyJob` struct: where to read from, where to
-write to, and a flag it flips once the copy worked. That is the whole of
-the state. Nothing crosses between threads, so mmcopier has no mutex in it
-anywhere. Every thread opens its own two streams and gets on with its own
-file, which is the point of task 1.
+**The lock.** One mutex covers everything shared: the queue, both file
+streams, and the reader bookkeeping. One lock means there is no second lock to
+deadlock against.
 
-The copying goes line by line with `getline`, same as the file reading in
-the week 5 lab. One catch: `getline` swallows the newline it stopped on.
-The code puts it back, except on the last line of a file that never had
-one. `eof()` tells those two apart. Miss it and every copy comes out a byte
-short.
+Both the `getline` and the write happen while the lock is held, and that is
+deliberate. The readers share one input stream, so taking turns is the only
+thing that works. It also keeps "read a line" and "add that line" as a single
+step. Split them and two readers could swap places on the way to the queue,
+which scrambles the copy. Same reasoning for the writers.
 
-`main` keeps a count of how many threads actually started. If
-`pthread_create` gives up halfway, only the threads that exist get joined,
-so nothing is still running when the program returns. Every pthread call
-and every file operation gets its return value checked.
+**No busy waiting.** Two condition variables do the waiting:
 
-`n` tops out at 10, so the threads and jobs sit in fixed arrays. No heap,
-nothing to free, nothing to leak.
+- `hasRoom` puts a reader to sleep when the queue is full. A writer signals it
+  after freeing a slot.
+- `hasWork` puts a writer to sleep when the queue is empty. A reader signals
+  it after adding a line.
 
-## Testing Task 1
+Both waits sit in `while` loops rather than `if`, because a condition variable
+is allowed to wake a thread for no reason. When the last reader reaches the
+end of the file it broadcasts on `hasWork`, so writers waiting on an empty
+queue wake up, finish what is left, and exit instead of hanging.
 
-I ran it with every n from 2 to 10 against the supplied `source_dir`.
+The lecture slides cover threads but not mutexes or condition variables, so
+the `pthread_cond` calls come from section 12 of the assignment brief and the
+man pages.
+
+## Newlines
+
+`getline` throws away the newline it stopped on. Both programs add it back,
+except on the last line of a file that never had one, which `eof()` picks out.
+Without that check every copy comes out a byte short.
+
+## Errors and memory
+
+Every `pthread` call, file open, and write gets its return value checked, and
+anything that fails prints to stderr and exits 1. If a write fails partway,
+mscopier sets a flag and broadcasts on both condition variables so the threads
+stop rather than hang. The mutex and both condition variables get destroyed
+before the program returns.
+
+Neither program allocates anything on the heap. `n` never goes above 10, so
+the threads and jobs live in fixed arrays.
+
+## Testing
+
+mmcopier ran with every n from 2 to 10 against the supplied `source_dir`.
 `diff -r` came back clean each time and the file count always matched n.
-Then the awkward ones: an empty file, a file that is mostly blank lines,
-and a file with no newline at the end. All three came out identical.
 
-Bad arguments get their own pass. Wrong number of them, a non-numeric n, n
-outside 2 to 10, a source directory that is not there, a destination that
-cannot be written. Each one prints a message and exits 1 instead of
-falling over.
+mscopier ran 30 times with random n over a 50,000 line file built from
+`wordlist.10000`. Every run matched the input byte for byte.
 
-On jupiter, valgrind reports no leaks and no errors:
+I put both through an empty file, a file of blank lines, and a file with no
+newline on the end. Bad arguments get their own pass: wrong count, a
+non-numeric n, n out of range, a missing source, a destination that cannot be
+written.
+
+valgrind on jupiter reports nothing for either program.
 
 ```
-valgrind --track-origins=yes --leak-check=full --show-leak-kinds=all ./mmcopier 10 source_dir dest_dir
+valgrind --track-origins=yes --leak-check=full --show-leak-kinds=all ./mscopier 10 input output
 ```
 
 ```
 in use at exit: 0 bytes in 0 blocks
-total heap usage: 136 allocs, 136 frees, 225,397 bytes allocated
+total heap usage: 10,110 allocs, 10,110 frees
 ERROR SUMMARY: 0 errors from 0 contexts
 ```

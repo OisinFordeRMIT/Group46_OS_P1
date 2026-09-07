@@ -1,0 +1,15 @@
+# Build artifacts - rebuilt by `make all`, should not be committed
+mmcopier
+mscopier
+*.o
+*.exe
+
+# Test output
+destination_dir/
+output
+
+# Generated submission bundle - rebuild rather than commit
+submission/
+
+# macOS
+.DS_Store
